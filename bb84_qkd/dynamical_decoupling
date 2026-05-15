@@ -1,0 +1,112 @@
+# DD SEQUENCES - Dynamical decoupling under a quasi-static noise model
+
+from __future__ import annotations
+from enum import Enum, auto
+import numpy as np
+
+
+class DDSequence(Enum):
+    NONE = auto()       # No DD: full T2 dephasing exposure
+    HAHN_ECHO = auto()  # One pi-pulse at tau/2
+    CPMG = auto()       # n equally spaced pi-pulses
+
+def effective_dephasing_prob(tau_us: float, t2_us: float, sequence: DDSequence = DDSequence.NONE, n_pulses: int = 1) -> float:
+    """
+    Compute the effective phase-error probability after dynamical decoupling.
+
+    This effective probability replaces the bare dephasing probability in
+    the Pauli Z error injection model, capturing the suppression of phase
+    noise produced by the DD sequence.
+
+    Quasi-static noise model:
+        p_eff = 0.5 * (1 - exp(-tau_eff / T2))
+
+    Effective exposure times:
+        NONE:   tau_eff = tau
+        HAHN:   tau_eff = tau / 2
+        CPMG-n: tau_eff = tau / (2n)
+
+    Parameters:
+    tau_us : Total quantum memory idle time in microseconds.
+    t2_us : Memory coherence time T2 in microseconds.
+    sequence : Dynamical decoupling sequence to apply.
+    n_pulses : Number of pi-pulses, used only for CPMG.
+
+    Returns: Effective phase-error probability p_eff in [0, 0.5].
+    """
+    if sequence == DDSequence.NONE:
+        tau_eff = tau_us
+
+    elif sequence == DDSequence.HAHN_ECHO:
+        tau_eff = tau_us / 2.0
+
+    elif sequence == DDSequence.CPMG:
+        if n_pulses < 1:
+            raise ValueError(f"CPMG requires n_pulses >= 1, received {n_pulses}.")
+        tau_eff = tau_us / (2.0 * n_pulses)
+
+    else:
+        raise ValueError(f"Unknown DDSequence: {sequence}.")
+
+    return 0.5 * (1.0 - np.exp(-tau_eff / t2_us))
+
+
+def compare_sequences(tau_us: float, t2_us: float, n_pulses: int = 4) -> dict[str, float]:
+    """
+    Return effective dephasing probabilities for the main DD configurations.
+
+    Parameters:
+    tau_us : Total quantum memory idle time in microseconds.
+    t2_us : Memory coherence time T2 in microseconds.
+    n_pulses : Number of CPMG pulses for the final CPMG-n entry.
+
+    Returns: Mapping from DD sequence labels to effective dephasing probabilities.
+    """
+    return {"No DD": effective_dephasing_prob(tau_us, t2_us, DDSequence.NONE),
+        "Hahn Echo": effective_dephasing_prob(tau_us, t2_us, DDSequence.HAHN_ECHO),
+        "CPMG-2": effective_dephasing_prob(tau_us, t2_us, DDSequence.CPMG, n_pulses=2),
+        f"CPMG-{n_pulses}": effective_dephasing_prob(tau_us, t2_us, DDSequence.CPMG, n_pulses=n_pulses)}
+
+
+def effective_exposure_time(tau_us: float, sequence: DDSequence, n_pulses: int = 1) -> float:
+    """
+    Compute the effective exposure time tau_eff for a DD sequence.
+
+    This helper is used only for summaries and diagnostics.
+    """
+    if sequence == DDSequence.NONE:
+        return tau_us
+
+    if sequence == DDSequence.HAHN_ECHO:
+        return tau_us / 2.0
+
+    if sequence == DDSequence.CPMG:
+        if n_pulses < 1:
+            raise ValueError(f"CPMG requires n_pulses >= 1, received {n_pulses}.")
+        return tau_us / (2.0 * n_pulses)
+
+    raise ValueError(f"Unknown DDSequence: {sequence}.")
+
+
+def print_dd_summary(tau_us: float, t2_us: float) -> None:
+    """
+    Print a diagnostic table of effective dephasing probabilities
+    for common DD sequences.
+    """
+    print("Dynamical decoupling summary")
+    print(f"  tau={tau_us} µs, T2={t2_us} µs, tau/T2={tau_us / t2_us:.3f}")
+    print()
+    print(f"  {'Sequence':<14} {'n_pulses':>8} {'tau_eff [µs]':>14} {'p_eff':>10} {'Reduction':>11}")
+    print(f"  {'-' * 65}")
+
+    p_free = effective_dephasing_prob(tau_us, t2_us, DDSequence.NONE)
+
+    configs = [("No DD", DDSequence.NONE, 0),("Hahn Echo", DDSequence.HAHN_ECHO, 1),("CPMG-2", DDSequence.CPMG, 2),("CPMG-4", DDSequence.CPMG, 4)]
+
+    for name, sequence, n_pulses in configs:
+        n_for_calc = max(n_pulses, 1)
+        p_eff = effective_dephasing_prob(tau_us,t2_us, sequence, n_pulses=n_for_calc)
+        tau_eff = effective_exposure_time(tau_us,sequence,n_pulses=n_for_calc)
+        reduction = (1.0 - p_eff / p_free) * 100.0 if p_free > 0 else 0.0
+
+        print(f"  {name:<14} {n_pulses:>8} {tau_eff:>14.3f} "f"{p_eff:>10.5f} {reduction:>10.1f}%")
