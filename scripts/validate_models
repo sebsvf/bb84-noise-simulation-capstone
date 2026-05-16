@@ -1,0 +1,108 @@
+# VALIDATE MODELS - Basic validation checks for each simulation module
+
+from __future__ import annotations
+from scipy.stats import poisson
+from bb84_qkd.config import (ATTENUATION_DB_PER_KM,
+    BASE_DEPOL_RATE,
+    DEPOL_REF_LENGTH_KM,
+    DETECTOR_EFFICIENCY,
+    MEMORY_IDLE_TIME_US,
+    MU,
+    N_SHOTS,
+    RANDOM_SEED,
+    T2_US)
+
+from bb84_qkd.wcs_emitter import emit_pulses
+from bb84_qkd.optical_channel import attenuation_efficiency, survival_probability
+from bb84_qkd.dd_sequences import DDSequence, effective_dephasing_prob
+from bb84_qkd.bb84_protocol import simulate_bb84
+
+
+def main() -> None:
+    """Run basic validation checks for the BB84 QKD simulation modules."""
+    all_passed = True
+
+    print("=" * 60)
+    print("  MODULE VALIDATION CHECKS")
+    print("=" * 60)
+
+    # Test 1: WCS emitter
+    print("\n[TEST 1] WCS emitter — Poisson distribution (mu=0.1, N=100k)")
+    stats = emit_pulses(N_SHOTS, MU, seed=RANDOM_SEED)
+    print(stats.summary())
+
+    theory_p1 = poisson.pmf(1, MU)
+    sim_p1 = stats.frac_single
+    wcs_ok = abs(sim_p1 - theory_p1) < 0.005
+    all_passed &= wcs_ok
+
+    print(f"  Theoretical P(n=1): {theory_p1:.5f} | "f"Simulated: {sim_p1:.5f} | "f"Error: {abs(sim_p1 - theory_p1) * 100:.3f}% "
+        f"{'PASS' if wcs_ok else 'FAIL'}")
+
+    # Test 2: Optical channel
+    print("\n[TEST 2] Optical channel — L=10 km, alpha=0.2 dB/km, eta_det=0.85")
+    eta_att = attenuation_efficiency(10, ATTENUATION_DB_PER_KM)
+    p_surv = survival_probability(10, ATTENUATION_DB_PER_KM, DETECTOR_EFFICIENCY)
+
+    eta_ok = abs(eta_att - 0.631) < 0.001
+    all_passed &= eta_ok
+
+    print(f"  eta_att = {eta_att:.4f}  "f"(expected ≈ 0.6310) {'PASS' if eta_ok else 'FAIL'}")
+    print(f"  p_surv = {p_surv:.4f}")
+
+    # Test 3: DD sequences
+    print("\n[TEST 3] DD sequences — Monotonic decrease of p_eff with n_pulses")
+    p_prev = 1.0
+    monotonic_ok = True
+
+    for n_pulses in [1, 2, 4, 8]:
+        p_eff = effective_dephasing_prob(MEMORY_IDLE_TIME_US, T2_US, DDSequence.CPMG, n_pulses)
+        current_ok = p_eff < p_prev
+        monotonic_ok &= current_ok
+
+        print(f"  CPMG-{n_pulses:>2}: p_eff={p_eff:.6f}  "f"{'PASS' if current_ok else 'FAIL: NOT MONOTONIC'}")
+        p_prev = p_eff
+
+    all_passed &= monotonic_ok
+    print(f"  Global monotonicity: {'PASS' if monotonic_ok else 'FAIL'}")
+
+    # Test 4: BB84 without noise
+    print("\n[TEST 4] BB84 without noise → QBER should be 0%")
+    perfect_result = simulate_bb84(
+        N_SHOTS,
+        p_surv=1.0,
+        p_depol_channel=0.0,
+        p_deph_memory=0.0,
+        seed=RANDOM_SEED,
+    )
+
+    qber_ok = perfect_result.qber < 0.001
+    all_passed &= qber_ok
+
+    print(
+        f"  QBER={perfect_result.qber * 100:.4f}%  "
+        f"SKR={perfect_result.skr:.4f}  "
+        f"n_sifted={perfect_result.n_sifted:,}  "
+        f"{'PASS' if qber_ok else 'FAIL'}"
+    )
+
+    # Test 5: Sifting efficiency
+    print("\n[TEST 5] Sifting efficiency ≈ 50%")
+    sift_eff = perfect_result.n_sifted / N_SHOTS
+    sifting_ok = abs(sift_eff - 0.5) < 0.02
+    all_passed &= sifting_ok
+
+    print(
+        f"  Sifting efficiency: {sift_eff * 100:.2f}%  "
+        f"{'PASS' if sifting_ok else 'FAIL'}"
+    )
+
+    if all_passed:
+        print("\nAll validation checks passed.")
+    else:
+        print("\nSome validation checks failed.")
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
