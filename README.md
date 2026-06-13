@@ -1,6 +1,6 @@
 # bb84-noise-simulation
 
-Abstract
+## Abstract
 We present a scalable stochastic simulator for the
 BB84 quantum key distribution (QKD) protocol that
 bridges the gap between the mathematical rigor of
