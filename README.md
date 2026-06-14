@@ -25,38 +25,7 @@ network nodes.
 Keywords: BB84, quantum key distribution, density matrices, CPTP maps, Kraus operators, stabilizer simulation, Stim, dynamical decoupling, CPMG,
 Hahn echo, QBER, Monte Carlo.
 
-### 1 Introduction
-Quantum Key Distribution (QKD) offers informationtheoretic security guarantees rooted in the postulates
-of quantum mechanics rather than computational
-hardness assumptions [1, 2]. The BB84 protocol encodes classical bits in conjugate bases of single-qubit
-states and exploits the no-cloning theorem to detect
-eavesdropping [1]. Its unconditional security has been
-proven under idealized conditions [3, 4].
-In practice, implementations are subject to a cascade of noise sources: photon loss in optical fiber,
-phase-damping decoherence in quantum memories,
-depolarizing noise from polarization fluctuations in
-the channel, and multi-photon vulnerabilities in attenuated laser sources. These imperfections drive the
-QBER upward; when QBER exceeds the Shor-Preskill
-threshold of ≈11%, no classical post-processing can
-distill a secure key [3, 5].
-
-### 1.1 Motivation
-Accurately simulating these effects poses a fundamental computational challenge. The density-matrix formalism—the correct tool for open quantum systems
-[5]—represents an N-qubit system as a 2N × 2
-N complex matrix, requiring O(22N ) memory and O(23N )
-time per gate application. For a network of N = 30
-memory qubits, this demands ∼1027 floating-point
-operations per protocol round—computationally infeasible.
-Existing simulation studies [17–19] have addressed
-individual components of this problem, but none has
-simultaneously: (i) grounded the noise model in the
-CPTP/Kraus operator formalism; (ii) translated those
-maps into a stabilizer-compatible stochastic noise
-model; and (iii) incorporated active DD mitigation of
-quantum memory nodes within the simulation loop
-with statistically robust multi-repetition averaging
-
-### 1.2 Contributions
+### 1. Contributions
 This work makes the following specific contributions:
 1. Density-matrix-to-Pauli translation: We derive the exact correspondence between phase-flip,
 depolarizing, and bit-flip Kraus channels and their
